@@ -13,14 +13,12 @@ from dashboard import BASE_STYLE, ME_ENDPOINT
 
 router = APIRouter()
 
-# project root (DB files live here)
-DASHBOARD_DIR = Path(__file__).resolve().parent          # .../Dashboard
-BASE_DIR = DASHBOARD_DIR.parent                          # project root (where dreambox.db is)
+# games.py lives in /Dashboard, but DB files live in project root
+DASHBOARD_DIR = Path(__file__).resolve().parent          # .../Dreambox/Dashboard
+BASE_DIR = DASHBOARD_DIR.parent                          # .../Dreambox
 
 USER_DB_PATH = BASE_DIR / "dreambox.db"
 GAMES_DB_PATH = BASE_DIR / "games.db"
-
-
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "CHANGE_ME_TO_A_LONG_RANDOM_SECRET")
 ALGORITHM = "HS256"
@@ -76,12 +74,14 @@ def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
 
 
 def _column_exists(conn: sqlite3.Connection, table: str, col: str) -> bool:
+    # NOTE: PRAGMA table_info returns rows like: (cid, name, type, notnull, dflt_value, pk)
     cur = conn.execute(f"PRAGMA table_info({table})")
     return any(r[1] == col for r in cur.fetchall())
 
 
 def ensure_games_schema():
     with games_db() as conn:
+        # Create base table
         if not _table_exists(conn, "games"):
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS games (
@@ -100,7 +100,7 @@ def ensure_games_schema():
             conn.execute("CREATE INDEX IF NOT EXISTS idx_games_universe ON games(universe_id);")
             conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_games_owner_universe ON games(owner_user_id, universe_id);")
 
-        # older installs: add columns if missing
+        # Older installs: add columns if missing (all aligned at same indentation)
         if not _column_exists(conn, "games", "game_url"):
             try:
                 conn.execute("ALTER TABLE games ADD COLUMN game_url TEXT;")
@@ -125,6 +125,7 @@ def ensure_games_schema():
             except Exception:
                 pass
 
+        # Optional analytics table
         if not _table_exists(conn, "stats_snapshots"):
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS stats_snapshots (
@@ -143,32 +144,8 @@ def ensure_games_schema():
         conn.commit()
 
 
+# IMPORTANT: schema ensure must run at import time, but it must not crash
 ensure_games_schema()
-
-
-
-
-def _db_fail(e: Exception) -> HTTPException:
-    # returns a JSON {detail: "..."} so your JS shows the real message
-    return HTTPException(status_code=500, detail=f"DB error: {type(e).__name__}: {e}")
-
-def _assert_users_schema():
-    try:
-        with users_db() as conn:
-            conn.execute("SELECT id, email, account_type FROM users LIMIT 1").fetchone()
-    except Exception as e:
-        raise _db_fail(e)
-
-def _assert_games_schema():
-    try:
-        with games_db() as conn:
-            conn.execute("SELECT id, owner_user_id, universe_id FROM games LIMIT 1").fetchone()
-    except Exception as e:
-        raise _db_fail(e)
-
-
-
-
 
 
 def _get_bearer_token(request: Request) -> str:
@@ -191,19 +168,15 @@ def _get_current_user_row(request: Request) -> sqlite3.Row:
     token = _get_bearer_token(request)
     user_id = _decode_token_get_user_id(token)
 
-    try:
-        with users_db() as conn:
-            row = conn.execute(
-                "SELECT id, email, account_type FROM users WHERE id=?",
-                (user_id,),
-            ).fetchone()
-    except Exception as e:
-        raise _db_fail(e)
+    with users_db() as conn:
+        row = conn.execute(
+            "SELECT id, email, account_type FROM users WHERE id=?",
+            (user_id,),
+        ).fetchone()
 
     if not row:
         raise HTTPException(status_code=401, detail="User not found")
     return row
-
 
 
 def _is_partner(acct: str) -> bool:
@@ -228,7 +201,10 @@ def _try_resolve_universe_id(place_id: int) -> int:
         return place_id
 
     try:
-        r = requests.get(f"https://apis.roblox.com/universes/v1/places/{place_id}/universe", timeout=10)
+        r = requests.get(
+            f"https://apis.roblox.com/universes/v1/places/{place_id}/universe",
+            timeout=10
+        )
         if r.ok:
             j = r.json()
             uid = j.get("universeId")
@@ -268,7 +244,6 @@ def _try_resolve_game_name(universe_id: int) -> Optional[str]:
 
 JS_BOOT = f"""
 <script>
-  // Allow token via localStorage OR ?token=... (iframe/embed friendly)
   (function(){{
     const params = new URLSearchParams(window.location.search);
     const t = params.get("token");
@@ -498,7 +473,6 @@ def games_page():
     return html_page("Games", body)
 
 
-
 @router.get("/games/api/list")
 def api_list(request: Request):
     u = _get_current_user_row(request)
@@ -507,18 +481,14 @@ def api_list(request: Request):
     if not (_is_partner(acct) or _is_admin(acct)):
         raise HTTPException(status_code=403, detail="Not allowed")
 
-    try:
-        with games_db() as conn:
-            rows = conn.execute(
-                "SELECT id, owner_user_id, universe_id, name, game_url, is_favorite, delete_requested, delete_requested_at "
-                "FROM games WHERE owner_user_id=? ORDER BY is_favorite DESC, id DESC",
-                (u["id"],),
-            ).fetchall()
-    except Exception as e:
-        raise _db_fail(e)
+    with games_db() as conn:
+        rows = conn.execute(
+            "SELECT id, owner_user_id, universe_id, name, game_url, is_favorite, delete_requested, delete_requested_at "
+            "FROM games WHERE owner_user_id=? ORDER BY is_favorite DESC, id DESC",
+            (u["id"],),
+        ).fetchall()
 
     return {"games": [dict(r) for r in rows]}
-
 
 
 @router.post("/games/api/add")
@@ -538,28 +508,22 @@ async def api_add(request: Request):
     universe_id = _try_resolve_universe_id(place_id)
     name = _try_resolve_game_name(universe_id)
 
-    try:
-        with games_db() as conn:
-            existing = conn.execute(
-                "SELECT id FROM games WHERE owner_user_id=? AND universe_id=?",
-                (u["id"], universe_id),
-            ).fetchone()
-            if existing:
-                raise HTTPException(status_code=400, detail="Game already added")
+    with games_db() as conn:
+        existing = conn.execute(
+            "SELECT id FROM games WHERE owner_user_id=? AND universe_id=?",
+            (u["id"], universe_id),
+        ).fetchone()
+        if existing:
+            raise HTTPException(status_code=400, detail="Game already added")
 
-            conn.execute(
-                "INSERT INTO games (owner_user_id, universe_id, name, created_at, game_url, is_favorite, delete_requested, delete_requested_at) "
-                "VALUES (?, ?, ?, ?, ?, 0, 0, NULL)",
-                (u["id"], universe_id, name, datetime.utcnow().isoformat(), game_url),
-            )
-            conn.commit()
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise _db_fail(e)
+        conn.execute(
+            "INSERT INTO games (owner_user_id, universe_id, name, created_at, game_url, is_favorite, delete_requested, delete_requested_at) "
+            "VALUES (?, ?, ?, ?, ?, 0, 0, NULL)",
+            (u["id"], universe_id, name, datetime.utcnow().isoformat(), game_url),
+        )
+        conn.commit()
 
     return {"ok": True, "universe_id": universe_id, "name": name}
-
 
 
 @router.post("/games/api/favorite")
