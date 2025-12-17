@@ -1,0 +1,72 @@
+{
+  "AccountPending": {
+    "can_view_basic_dashboard": true,
+    "can_view_game_data": false,
+    "can_manage_games": false,
+    "can_view_products": false,
+    "can_view_brand_campaigns": false,
+    "can_manage_brand": false,
+    "can_pay_for_products": false,
+    "can_admin": false
+  },
+  "PartnerAccount": {
+    "can_view_basic_dashboard": true,
+    "can_view_game_data": true,
+    "can_manage_games": true,
+    "can_view_products": false,
+    "can_view_brand_campaigns": false,
+    "can_manage_brand": false,
+    "can_pay_for_products": false,
+    "can_admin": false
+  },
+  "BusinessAccount": {
+    "can_view_basic_dashboard": true,
+    "can_view_game_data": false,
+    "can_manage_games": false,
+    "can_view_products": true,
+    "can_view_brand_campaigns": false,
+    "can_manage_brand": false,
+    "can_pay_for_products": true,
+    "can_admin": false
+  },
+  "BrandSpecialistAccount": {
+    "can_view_basic_dashboard": true,
+    "can_view_game_data": false,
+    "can_manage_games": false,
+    "can_view_products": false,
+    "can_view_brand_campaigns": true,
+    "can_manage_brand": false,
+    "can_pay_for_products": false,
+    "can_admin": false
+  },
+  "BrandPartnerAccount": {
+    "can_view_basic_dashboard": true,
+    "can_view_game_data": false,
+    "can_manage_games": false,
+    "can_view_products": true,
+    "can_view_brand_campaigns": true,
+    "can_manage_brand": true,
+    "can_pay_for_products": true,
+    "can_admin": false
+  },
+  "BrandAccount": {
+    "can_view_basic_dashboard": true,
+    "can_view_game_data": false,
+    "can_manage_games": false,
+    "can_view_products": true,
+    "can_view_brand_campaigns": true,
+    "can_manage_brand": true,
+    "can_pay_for_products": true,
+    "can_admin": false
+  },
+  "AdministratorDreamboxInteractiveAccount": {
+    "can_view_basic_dashboard": true,
+    "can_view_game_data": true,
+    "can_manage_games": true,
+    "can_view_products": true,
+    "can_view_brand_campaigns": true,
+    "can_manage_brand": true,
+    "can_pay_for_products": true,
+    "can_admin": true
+  }
+}
